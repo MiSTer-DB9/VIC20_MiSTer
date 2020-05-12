@@ -16,3 +16,5 @@ set_global_assignment -name VHDL_FILE rtl/m6561.vhd
 set_global_assignment -name VHDL_FILE rtl/m6522.vhd
 set_global_assignment -name VHDL_FILE rtl/vic20.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE VIC20.sv
+set_global_assignment -name VERILOG_FILE rtl/joydb9md.v
+set_global_assignment -name VERILOG_FILE rtl/joydb15.v
