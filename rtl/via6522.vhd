@@ -16,7 +16,7 @@ use ieee.std_logic_1164.all;
 use ieee.std_logic_arith.all;
 use ieee.std_logic_unsigned.all;
 
-entity c1541_via6522 is
+entity via6522 is
 port (
     clock       : in  std_logic;
     rising      : in  std_logic;
@@ -57,9 +57,9 @@ port (
 
     irq         : out std_logic );
     
-end entity;
+end via6522;
 
-architecture Gideon of c1541_via6522 is
+architecture Gideon of via6522 is
 
     type pio_t is
     record
@@ -97,7 +97,7 @@ architecture Gideon of c1541_via6522 is
     signal cb1_o_int     : std_logic;
     signal cb2_t_int     : std_logic;
     signal cb2_o_int     : std_logic;
-        
+
     alias  ca2_event     : std_logic is irq_events(0);
     alias  ca1_event     : std_logic is irq_events(1);
     alias  serial_event  : std_logic is irq_events(2);
@@ -272,7 +272,7 @@ begin
 
             -- Interrupt logic
             irq_flags <= irq_flags or irq_events;
-            
+
             -- Writes --
             if wen='1' and falling = '1' then
                 case addr is
