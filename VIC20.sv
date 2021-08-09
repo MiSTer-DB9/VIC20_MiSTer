@@ -175,7 +175,6 @@ output	[7:0] USER_OUT,
 	input         OSD_STATUS
 );
 
-assign ADC_BUS  = 'Z;
 wire         CLK_JOY = CLK_50M;         //Assign clock between 40-50Mhz
 wire   [2:0] JOY_FLAG  = ~ext_iec_en ? {status[30],status[31],status[29]} : 3'b000; //Assign 3 bits of status (31:29) o (63:61)
 wire         JOY_CLK, JOY_LOAD, JOY_SPLIT, JOY_MDSEL;
@@ -590,7 +589,7 @@ VIC20 VIC20
 
 	.cass_read(tape_adc_act ? ~tape_adc : cass_read),
 	.cass_motor(cass_motor),
-	.cass_sw(cass_sense),
+	.cass_sw(~tape_adc_act & cass_sense),
 
 	.rom_std(rom_std),
 	.conf_clk(clk_sys),
