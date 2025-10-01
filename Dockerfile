@@ -3,4 +3,4 @@ LABEL maintainer="theypsilon@gmail.com"
 WORKDIR /project
 ADD . /project
 RUN /opt/intelFPGA_lite/quartus/bin/quartus_sh --flow compile VIC20.qpf
-CMD cat /project/output_files/VIC20.rbf
+CMD ["cat", "/project/output_files/VIC20.rbf"]
