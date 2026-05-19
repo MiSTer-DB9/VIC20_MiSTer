@@ -418,7 +418,7 @@ wire [21:0] gamma_bus;
 
 // F1 U D L R 
 wire [31:0] joya = joydb_1ena ? (OSD_STATUS? 32'b000000 : {joydb_1[5]|joydb_1[4],joydb_1[3:0]}) : joya_USB;
-wire [31:0] joyb = joydb_2ena ? (OSD_STATUS? 32'b000000 : {joydb_1[5]|joydb_1[4],joydb_1[3:0]}) : joydb_1ena ? joya_USB : joyb_USB;
+wire [31:0] joyb = joydb_2ena ? (OSD_STATUS? 32'b000000 : {joydb_2[5]|joydb_2[4],joydb_2[3:0]}) : joydb_1ena ? joya_USB : joyb_USB;
 
 
 
