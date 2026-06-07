@@ -29,7 +29,7 @@ module emu
 	input         RESET,
 
 	//Must be passed to hps_io module
-	inout  [48:0] HPS_BUS,
+	inout  [45:0] HPS_BUS,
 
 	//Base video clock. Usually equals to CLK_SYS.
 	output        CLK_VIDEO,
@@ -57,6 +57,8 @@ module emu
 	input  [11:0] HDMI_WIDTH,
 	input  [11:0] HDMI_HEIGHT,
 	output        HDMI_FREEZE,
+	output        HDMI_BLACKOUT,
+	output        HDMI_BOB_DEINT,
 
 `ifdef MISTER_FB
 	// Use framebuffer in DDRAM
@@ -205,7 +207,8 @@ wire  [15:0] joy_raw_payload;
 // [MiSTer-DB9 BEGIN] - DB9/SNAC8 support: probe-gating wires
 // SNAC cores: replace 1'b0 with the core's SNAC enable expression so SNAC
 // preempts the joydb wrapper on shared USER_IO pins. Default 1'b0 is no-op.
-wire         snac_active     = 1'b0;
+// VIC20: upstream's native DB9 SNAC (status[32]) preempts the joydb wrapper.
+wire         snac_active     = snac_en;
 // MT32-pi probe-suppression gate. Auto-detected from MT32 signals declared
 // elsewhere in this file (mt32_disable / mt32_use / mt32_on_primary). Hand-edit
 // if the heuristic missed your core's gate expression. Suppresses the OSD-open
@@ -245,6 +248,8 @@ assign BUTTONS   = 0;
 assign VGA_SCALER= 0;
 assign VGA_DISABLE = 0;
 assign HDMI_FREEZE = 0;
+assign HDMI_BLACKOUT = 0;
+assign HDMI_BOB_DEINT = 0;
 
 
 // Status Bit Map:
@@ -297,6 +302,9 @@ parameter CONF_STR = {
 	"FC6,ROM,Load Kernal;",
 	"-;",
 	"OU,Swap paddles,No,Yes;",
+	"-;",
+	"O[32],SNAC Joystick,Off,On;",
+	"O[34:33],SNAC Autofire,Off,Slow,Fast;",
 	"-;",
 	"R0,Reset;",
 	"RR,Reset & Detach Cartridge;",
@@ -398,6 +406,7 @@ end
 /////////////////  HPS  ///////////////////////////
 
 // [MiSTer-DB9 BEGIN] - widened to 128 bits for joy_type at [127:126] and joy_2p at [125]
+// (supersets upstream's 64-bit widening for SNAC status[34:32])
 wire [127:0] status;
 // [MiSTer-DB9 END]
 wire  [1:0] buttons;
@@ -681,6 +690,26 @@ wire [7:0] mc_data = mc_nvram_sel ? mc_nvram_out : sdram_out;
 
 wire [15:0] joy = joya | joyb;
 
+// SNAC Joystick support via UserIO (DB9 pinout)
+// DB9 Pin 1 Up     -> USER_IN[1]
+// DB9 Pin 2 Down   -> USER_IN[0]
+// DB9 Pin 3 Left   -> USER_IN[5]
+// DB9 Pin 4 Right  -> USER_IN[3]
+// DB9 Pin 5 NC
+// DB9 Pin 6 Fire   -> USER_IN[2]
+wire        snac_en     = status[32];
+// snac_joy[4]=fire, [3]=up, [2]=down, [1]=left, [0]=right – active high
+wire [4:0]  snac_joy    = {~USER_IN[2], ~USER_IN[1], ~USER_IN[0], ~USER_IN[5], ~USER_IN[3]};
+
+// SNAC Autofire: oscillatore software, non richiede +5V hardware (DB9 Pin 5)
+wire [1:0]  snac_af_mode = status[34:33];
+reg  [21:0] snac_af_cnt;
+always @(posedge clk_sys) snac_af_cnt <= snac_af_cnt + 1'd1;
+// Slow ~8.4 Hz | Fast ~16.8 Hz  (clk_sys ~35 MHz PAL)
+wire        snac_af_clk  = (snac_af_mode == 2'd2) ? snac_af_cnt[20] : snac_af_cnt[21];
+wire [4:0]  snac_joy_af  = {snac_af_mode ? (snac_joy[4] & snac_af_clk) : snac_joy[4],
+                            snac_joy[3:0]};
+
 reg [10:0] v20_key;
 always @(posedge clk_sys) begin
 	reg [10:0] key;
@@ -706,8 +735,10 @@ VIC20 VIC20
 	.clk_i(c1541_iec_clk_o & ext_iec_clk),
 	.data_i(c1541_iec_data_o & ext_iec_data),
 
-	.i_joy(~{joy[0] | (status[30] ? joya[5] : joyb[5]),joy[1] | (status[30] ? joyb[5] : joya[5]),joy[2],joy[3]}),
-	.i_fire(~joy[4]),
+	.i_joy(snac_en
+		? ~{snac_joy_af[0], snac_joy_af[1], snac_joy_af[2], snac_joy_af[3]}
+		: ~{joy[0] | (status[30] ? joya[5] : joyb[5]),joy[1] | (status[30] ? joyb[5] : joya[5]),joy[2],joy[3]}),
+	.i_fire(snac_en ? ~snac_joy_af[4] : ~joy[4]),
 	.i_potx(~(status[30] ? pd2 : pd1)),
 	.i_poty(~(status[30] ? pd1 : pd2)),
 
@@ -930,21 +961,24 @@ always @(negedge clk_sys) begin
 end
 
 wire ext_iec_en   = status[21];
-wire ext_iec_clk  = USER_IN[2] | ~ext_iec_en;
-wire ext_iec_data = USER_IN[4] | ~ext_iec_en;
+// Quando SNAC e' attivo, esclude i pin USER dall'IEC (mutualmente esclusivi)
+wire ext_iec_clk  = USER_IN[2] | ~ext_iec_en | snac_en;
+wire ext_iec_data = USER_IN[4] | ~ext_iec_en | snac_en;
 
 always_comb begin
 USER_OUT    = '1;
  if (ext_iec_en) begin
 	USER_OUT[0] = 1;
 	USER_OUT[1] = 1;
-	USER_OUT[2] = (v20_iec_clk_o & c1541_iec_clk_o)  | ~ext_iec_en;
-	USER_OUT[3] = ~(reset|tv_reset) | ~ext_iec_en;
-	USER_OUT[4] = (v20_iec_data_o & c1541_iec_data_o) | ~ext_iec_en;
-	USER_OUT[5] = v20_iec_atn_o | ~ext_iec_en;
+	USER_OUT[2] = snac_en | (v20_iec_clk_o & c1541_iec_clk_o)  | ~ext_iec_en;
+	USER_OUT[3] = snac_en | ~(reset|tv_reset) | ~ext_iec_en;
+	USER_OUT[4] = snac_en | (v20_iec_data_o & c1541_iec_data_o) | ~ext_iec_en;
+	USER_OUT[5] = snac_en | v20_iec_atn_o | ~ext_iec_en;
 	USER_OUT[6] = 1;
  end
  // [MiSTer-DB9 BEGIN] - DB9/SNAC8 (and Saturn via wrapper) joystick drive arm
+ // snac_active (= upstream snac_en) forces USER_OUT_DRIVE high inside joydb, so
+ // upstream's native SNAC keeps clean ownership of the USER_IO pins here.
  else if (joy_any_en) begin
 	USER_OUT = USER_OUT_DRIVE;
  end
