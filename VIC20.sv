@@ -207,8 +207,9 @@ wire  [15:0] joy_raw_payload;
 // [MiSTer-DB9 BEGIN] - DB9/SNAC8 support: probe-gating wires
 // SNAC cores: replace 1'b0 with the core's SNAC enable expression so SNAC
 // preempts the joydb wrapper on shared USER_IO pins. Default 1'b0 is no-op.
-// VIC20: upstream's native DB9 SNAC (status[32]) preempts the joydb wrapper.
-wire         snac_active     = snac_en;
+// VIC20: upstream's native DB9 SNAC (status[32]) and external IEC (status[21],
+// USER_IO[2..5]) preempt the joydb wrapper.
+wire         snac_active     = snac_en | ext_iec_en;
 // MT32-pi probe-suppression gate. Auto-detected from MT32 signals declared
 // elsewhere in this file (mt32_disable / mt32_use / mt32_on_primary). Hand-edit
 // if the heuristic missed your core's gate expression. Suppresses the OSD-open
