@@ -1006,7 +1006,10 @@ USER_OUT    = '1;
  // [MiSTer-DB9 BEGIN] - DB9/SNAC8 (and Saturn via wrapper) joystick drive arm
  // snac_active (= upstream snac_en) forces USER_OUT_DRIVE high inside joydb, so
  // upstream's native SNAC keeps clean ownership of the USER_IO pins here.
- else if (joy_any_en) begin
+ // Unconditional else (not `else if (joy_any_en)`) so the OSD-open autodetect
+ // probe reaches the pins with UserIO Joystick Off; USER_OUT_DRIVE is all-ones
+ // whenever the probe is idle.
+ else begin
 	USER_OUT = USER_OUT_DRIVE;
  end
  // [MiSTer-DB9 END]
